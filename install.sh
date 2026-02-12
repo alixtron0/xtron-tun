@@ -172,12 +172,34 @@ else
     mkdir -p "$LIB_DIR"
 
     # Download lib files from GitHub
-    echo -e "${CYAN}→ Downloading library files...${NC}"
+    echo -e "${CYAN}→ Downloading library files from GitHub...${NC}"
+
+    LIB_FILES_DOWNLOADED=0
+    LIB_FILES_FAILED=0
+
     for lib_file in utils.sh kharej.sh iran.sh; do
-        curl -fsSL "https://raw.githubusercontent.com/alixtron0/xtron-tun/main/lib/$lib_file" -o "$LIB_DIR/$lib_file" 2>/dev/null || true
+        echo -e "${CYAN}  → Downloading $lib_file...${NC}"
+        if curl -fsSL "https://raw.githubusercontent.com/alixtron0/xtron-tun/main/lib/$lib_file" -o "$LIB_DIR/$lib_file" 2>/dev/null; then
+            if [[ -f "$LIB_DIR/$lib_file" ]] && [[ -s "$LIB_DIR/$lib_file" ]]; then
+                echo -e "${GREEN}    ✓ $lib_file downloaded successfully${NC}"
+                LIB_FILES_DOWNLOADED=$((LIB_FILES_DOWNLOADED + 1))
+            else
+                echo -e "${YELLOW}    ⚠ $lib_file download incomplete${NC}"
+                LIB_FILES_FAILED=$((LIB_FILES_FAILED + 1))
+            fi
+        else
+            echo -e "${YELLOW}    ⚠ Failed to download $lib_file (file may not exist on GitHub)${NC}"
+            LIB_FILES_FAILED=$((LIB_FILES_FAILED + 1))
+        fi
     done
+
     chmod +x "$LIB_DIR"/*.sh 2>/dev/null || true
-    echo -e "${GREEN}✓ Library files downloaded${NC}\n"
+
+    if [[ $LIB_FILES_DOWNLOADED -gt 0 ]]; then
+        echo -e "${GREEN}✓ Library files: $LIB_FILES_DOWNLOADED downloaded, $LIB_FILES_FAILED skipped${NC}\n"
+    else
+        echo -e "${YELLOW}⚠ No library files downloaded (they may not exist on GitHub yet)${NC}\n"
+    fi
 fi
 
 # Set ownership
