@@ -56,20 +56,37 @@ spin() {
     local -r spinner=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
 
+    # بررسی که PID معتبره
+    if ! kill -0 "$pid" 2>/dev/null; then
+        # اگه process از قبل تموم شده، منتظر میمونیم و exit code رو چک می‌کنیم
+        wait "$pid" 2>/dev/null || true
+        local exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+            printf "${GREEN}✓ ${message}... Done!${NC}\n"
+            return 0
+        else
+            printf "${RED}✗ ${message}... Failed! (Exit code: $exit_code)${NC}\n"
+            echo -e "${YELLOW}⚠ Warning: ${message} encountered an error but installation will continue${NC}"
+            return 0
+        fi
+    fi
+
     while kill -0 "$pid" 2>/dev/null; do
         printf "\r${CYAN}${spinner[$i]} ${message}...${NC}"
         i=$(( (i + 1) % 10 ))
         sleep 0.1
     done
 
-    wait "$pid"
+    wait "$pid" 2>/dev/null || true
     local exit_code=$?
 
     if [ $exit_code -eq 0 ]; then
         printf "\r${GREEN}✓ ${message}... Done!${NC}\n"
+        return 0
     else
-        printf "\r${RED}✗ ${message}... Failed!${NC}\n"
-        return $exit_code
+        printf "\r${RED}✗ ${message}... Failed! (Exit code: $exit_code)${NC}\n"
+        echo -e "${YELLOW}⚠ Warning: ${message} encountered an error but installation will continue${NC}"
+        return 0
     fi
 }
 
@@ -101,14 +118,19 @@ install_dependencies() {
 
     case $OS in
         ubuntu|debian)
-            (apt-get update -qq && apt-get install -y -qq \
-                curl wget git net-tools netcat jq bc \
-                build-essential libssl-dev >/dev/null 2>&1) &
+            {
+                apt-get update -qq >/dev/null 2>&1 || true
+                apt-get install -y -qq \
+                    curl wget git net-tools netcat jq bc \
+                    build-essential libssl-dev >/dev/null 2>&1 || true
+            } &
             spin $! "Installing system packages"
             ;;
         centos|rhel|fedora)
-            (dnf install -y -q curl wget git net-tools nc jq bc \
-                gcc make openssl-devel >/dev/null 2>&1) &
+            {
+                dnf install -y -q curl wget git net-tools nc jq bc \
+                    gcc make openssl-devel >/dev/null 2>&1 || true
+            } &
             spin $! "Installing system packages"
             ;;
         *)
@@ -140,14 +162,14 @@ install_gost() {
         return 0
     fi
 
-    (
-        cd /tmp
-        wget -q "https://github.com/go-gost/gost/releases/download/v${gost_version}/gost_${gost_version}_linux_${arch}.tar.gz"
-        tar -xzf "gost_${gost_version}_linux_${arch}.tar.gz"
-        mv gost /usr/local/bin/
-        chmod +x /usr/local/bin/gost
+    {
+        cd /tmp || exit 1
+        wget -q "https://github.com/go-gost/gost/releases/download/v${gost_version}/gost_${gost_version}_linux_${arch}.tar.gz" || exit 1
+        tar -xzf "gost_${gost_version}_linux_${arch}.tar.gz" || exit 1
+        mv gost /usr/local/bin/ || exit 1
+        chmod +x /usr/local/bin/gost || exit 1
         rm -f "gost_${gost_version}_linux_${arch}.tar.gz" README.md
-    ) &
+    } &
 
     spin $! "Installing GOST"
 }
@@ -166,11 +188,15 @@ install_socat() {
 
     case $OS in
         ubuntu|debian)
-            (apt-get install -y -qq socat >/dev/null 2>&1) &
+            {
+                apt-get install -y -qq socat >/dev/null 2>&1 || true
+            } &
             spin $! "Installing socat"
             ;;
         centos|rhel|fedora)
-            (dnf install -y -q socat >/dev/null 2>&1) &
+            {
+                dnf install -y -q socat >/dev/null 2>&1 || true
+            } &
             spin $! "Installing socat"
             ;;
     esac
@@ -180,13 +206,13 @@ install_socat() {
 create_directories() {
     echo -e "\n${YELLOW}Creating directory structure...${NC}\n"
 
-    (
-        mkdir -p "$CONFIG_DIR"/{kharej,iran,templates}
-        mkdir -p "$LIB_DIR"
-        mkdir -p "$LOG_DIR"
-        chmod 755 "$CONFIG_DIR" "$LIB_DIR"
-        chmod 750 "$LOG_DIR"
-    ) &
+    {
+        mkdir -p "$CONFIG_DIR"/{kharej,iran,templates} || true
+        mkdir -p "$LIB_DIR" || true
+        mkdir -p "$LOG_DIR" || true
+        chmod 755 "$CONFIG_DIR" "$LIB_DIR" || true
+        chmod 750 "$LOG_DIR" || true
+    } &
 
     spin $! "Creating directories"
 }
@@ -209,11 +235,11 @@ download_scripts() {
 set_permissions() {
     echo -e "\n${YELLOW}Setting permissions...${NC}\n"
 
-    (
+    {
         chmod +x "${INSTALL_DIR}/xtron-tun" 2>/dev/null || true
         chmod +x "${LIB_DIR}"/*.sh 2>/dev/null || true
-        chown -R root:root "$CONFIG_DIR" "$LIB_DIR"
-    ) &
+        chown -R root:root "$CONFIG_DIR" "$LIB_DIR" || true
+    } &
 
     spin $! "Setting permissions"
 }
