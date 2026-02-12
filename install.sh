@@ -70,7 +70,7 @@ case $OS in
         echo -e "${CYAN}→ Updating package list...${NC}"
         apt-get update -qq || true
         echo -e "${CYAN}→ Installing packages...${NC}"
-        apt-get install -y -qq curl wget git net-tools netcat jq bc build-essential libssl-dev || true
+        apt-get install -y -qq curl wget git net-tools netcat-openbsd jq bc build-essential libssl-dev || true
         ;;
     centos|rhel|fedora)
         echo -e "${CYAN}→ Installing packages...${NC}"
@@ -141,23 +141,43 @@ chmod 755 "$CONFIG_DIR" "$LIB_DIR"
 chmod 750 "$LOG_DIR"
 echo -e "${GREEN}✓ Directories created${NC}\n"
 
-# Copy main script
+# Download and install main script
 echo -e "${YELLOW}Installing xtron-tun script...${NC}"
 if [[ -f "./xtron-tun" ]]; then
+    # Local installation (from cloned repo)
     cp ./xtron-tun "$INSTALL_DIR/xtron-tun"
     chmod +x "$INSTALL_DIR/xtron-tun"
-    echo -e "${GREEN}✓ xtron-tun installed to $INSTALL_DIR${NC}\n"
+    echo -e "${GREEN}✓ xtron-tun installed from local file${NC}\n"
 else
-    echo -e "${YELLOW}⚠ xtron-tun script not found in current directory${NC}"
-    echo -e "${YELLOW}  You can copy it manually later to $INSTALL_DIR/xtron-tun${NC}\n"
+    # Remote installation (download from GitHub)
+    echo -e "${CYAN}→ Downloading xtron-tun from GitHub...${NC}"
+    curl -fsSL "https://raw.githubusercontent.com/alixtron0/xtron-tun/main/xtron-tun" -o "$INSTALL_DIR/xtron-tun" || {
+        echo -e "${RED}✗ Failed to download xtron-tun${NC}"
+        echo -e "${YELLOW}  Please check your internet connection and try again${NC}\n"
+        exit 1
+    }
+    chmod +x "$INSTALL_DIR/xtron-tun"
+    echo -e "${GREEN}✓ xtron-tun downloaded and installed${NC}\n"
 fi
 
-# Copy lib files if they exist
+# Download and install lib files
+echo -e "${YELLOW}Installing library files...${NC}"
 if [[ -d "./lib" ]]; then
-    echo -e "${YELLOW}Installing library files...${NC}"
+    # Local installation
     cp -r ./lib/* "$LIB_DIR/" 2>/dev/null || true
     chmod +x "$LIB_DIR"/*.sh 2>/dev/null || true
-    echo -e "${GREEN}✓ Library files installed${NC}\n"
+    echo -e "${GREEN}✓ Library files installed from local${NC}\n"
+else
+    # Remote installation - create basic structure
+    mkdir -p "$LIB_DIR"
+
+    # Download lib files from GitHub
+    echo -e "${CYAN}→ Downloading library files...${NC}"
+    for lib_file in utils.sh kharej.sh iran.sh; do
+        curl -fsSL "https://raw.githubusercontent.com/alixtron0/xtron-tun/main/lib/$lib_file" -o "$LIB_DIR/$lib_file" 2>/dev/null || true
+    done
+    chmod +x "$LIB_DIR"/*.sh 2>/dev/null || true
+    echo -e "${GREEN}✓ Library files downloaded${NC}\n"
 fi
 
 # Set ownership
