@@ -1,0 +1,55 @@
+# XTRON-TUN .gitignore
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Configuration files with sensitive data
+*-config.zip
+*.conf
+config/
+secrets/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Test files
+test/
+tests/
+*.test
+
+# Distribution
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Environment
+.env
+.env.local
+.env.*.local
