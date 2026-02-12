@@ -1,46 +1,31 @@
 #!/bin/bash
 
 #############################################
-# XTRON-TUN One-Line Installer
+# XTRON-TUN Installer
 # GitHub: alixtron0/xtron-tun
 # Author: AliXtron
-# Description: Professional SMTP Tunnel Manager
 #############################################
 
-# Disable strict error handling temporarily for debugging
-set -uo pipefail
-
-# Enable debugging
-DEBUG=${DEBUG:-0}
-if [[ "$DEBUG" == "1" ]]; then
-    set -x
-fi
-
-# Trap errors
-trap 'echo "Error on line $LINENO. Exit code: $?"' ERR
+set -e
 
 # Colors
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly MAGENTA='\033[0;35m'
-readonly CYAN='\033[0;36m'
-readonly WHITE='\033[1;37m'
-readonly NC='\033[0m' # No Color
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
 
-# Installation paths
-readonly INSTALL_DIR="/usr/local/bin"
-readonly CONFIG_DIR="/etc/xtron-tun"
-readonly LIB_DIR="/usr/local/lib/xtron-tun"
-readonly LOG_DIR="/var/log/xtron-tun"
-readonly GITHUB_REPO="https://raw.githubusercontent.com/alixtron0/xtron-tun/main"
+# Paths
+INSTALL_DIR="/usr/local/bin"
+CONFIG_DIR="/etc/xtron-tun"
+LIB_DIR="/usr/local/lib/xtron-tun"
+LOG_DIR="/var/log/xtron-tun"
 
-# Show banner
-show_banner() {
-    clear
-    echo -e "${CYAN}"
-    cat << "EOF"
+# Banner
+clear
+echo -e "${CYAN}"
+cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║     ██╗  ██╗████████╗██████╗  ██████╗ ███╗   ██╗        ║
@@ -55,274 +40,151 @@ show_banner() {
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
-    echo -e "${NC}"
-    echo -e "${WHITE}GitHub: ${CYAN}https://github.com/alixtron0/xtron-tun${NC}\n"
-}
+echo -e "${NC}"
+echo -e "${WHITE}GitHub: ${CYAN}https://github.com/alixtron0/xtron-tun${NC}\n"
 
-# Spinner function - Simplified and robust
-spin() {
-    local pid=$1
-    local message=$2
-    local spinner=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    local i=0
+# Check root
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}✗ This script must be run as root or with sudo${NC}"
+    exit 1
+fi
 
-    [[ "$DEBUG" == "1" ]] && echo "DEBUG: Spinning for PID=$pid, message=$message"
-
-    # Small delay to ensure process started
-    sleep 0.2
-
-    # Show spinner while process is running
-    while ps -p "$pid" > /dev/null 2>&1; do
-        printf "\r${CYAN}${spinner[$i]} ${message}...${NC}"
-        i=$(( (i + 1) % 10 ))
-        sleep 0.1
-    done
-
-    # Wait for process and get exit code
-    wait "$pid" 2>/dev/null
-    local exit_code=$?
-
-    [[ "$DEBUG" == "1" ]] && echo "DEBUG: Process $pid exited with code $exit_code"
-
-    # Always show success (continue on error)
-    printf "\r${GREEN}✓ ${message}... Done!${NC}\n"
-
-    if [ $exit_code -ne 0 ]; then
-        echo -e "${YELLOW}⚠ Warning: ${message} had issues (exit code: $exit_code) but continuing...${NC}"
-    fi
-
-    return 0
-}
-
-# Check root privileges
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        echo -e "${RED}✗ This script must be run as root or with sudo${NC}"
-        exit 1
-    fi
-}
+echo -e "${YELLOW}Starting installation...${NC}\n"
 
 # Detect OS
-detect_os() {
-    if [[ -f /etc/os-release ]]; then
-        . /etc/os-release
-        OS=$ID
-        VER=$VERSION_ID
-    else
-        echo -e "${RED}✗ Cannot detect OS${NC}"
-        exit 1
-    fi
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    OS=$ID
+    VER=$VERSION_ID
+else
+    echo -e "${RED}✗ Cannot detect OS${NC}"
+    exit 1
+fi
 
-    echo -e "${GREEN}✓ Detected OS: $OS $VER${NC}"
-}
+echo -e "${GREEN}✓ Detected OS: $OS $VER${NC}\n"
 
 # Install dependencies
-install_dependencies() {
-    echo -e "\n${YELLOW}Installing dependencies...${NC}\n"
-
-    case $OS in
-        ubuntu|debian)
-            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Starting apt-get for ubuntu/debian"
-
-            # Run in background with proper error handling
-            (
-                set +e  # Disable exit on error for this subshell
-                apt-get update -qq 2>&1 | tee -a /tmp/xtron-install.log || true
-                apt-get install -y -qq \
-                    curl wget git net-tools netcat jq bc \
-                    build-essential libssl-dev 2>&1 | tee -a /tmp/xtron-install.log || true
-                exit 0  # Always exit successfully
-            ) &
-
-            local bg_pid=$!
-            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Background PID=$bg_pid"
-            spin $bg_pid "Installing system packages"
-            ;;
-        centos|rhel|fedora)
-            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Starting dnf for centos/rhel/fedora"
-
-            (
-                set +e
-                dnf install -y -q curl wget git net-tools nc jq bc \
-                    gcc make openssl-devel 2>&1 | tee -a /tmp/xtron-install.log || true
-                exit 0
-            ) &
-
-            local bg_pid=$!
-            spin $bg_pid "Installing system packages"
-            ;;
-        *)
-            echo -e "${RED}✗ Unsupported OS: $OS${NC}"
-            exit 1
-            ;;
-    esac
-
-    [[ "$DEBUG" == "1" ]] && echo "DEBUG: install_dependencies completed"
-}
+echo -e "${YELLOW}Installing dependencies...${NC}"
+case $OS in
+    ubuntu|debian)
+        echo -e "${CYAN}→ Updating package list...${NC}"
+        apt-get update -qq || true
+        echo -e "${CYAN}→ Installing packages...${NC}"
+        apt-get install -y -qq curl wget git net-tools netcat jq bc build-essential libssl-dev || true
+        ;;
+    centos|rhel|fedora)
+        echo -e "${CYAN}→ Installing packages...${NC}"
+        dnf install -y -q curl wget git net-tools nc jq bc gcc make openssl-devel || true
+        ;;
+    *)
+        echo -e "${RED}✗ Unsupported OS: $OS${NC}"
+        exit 1
+        ;;
+esac
+echo -e "${GREEN}✓ Dependencies installed${NC}\n"
 
 # Install GOST
-install_gost() {
-    echo -e "\n${YELLOW}Installing GOST v3...${NC}\n"
-
-    local gost_version="3.0.0-rc10"
-    local arch=$(uname -m)
-
-    case $arch in
-        x86_64) arch="amd64" ;;
-        aarch64) arch="arm64" ;;
-        armv7l) arch="armv7" ;;
+echo -e "${YELLOW}Installing GOST v3...${NC}"
+if command -v gost >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ GOST already installed${NC}\n"
+else
+    GOST_VERSION="3.0.0-rc10"
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64) ARCH="amd64" ;;
+        aarch64) ARCH="arm64" ;;
+        armv7l) ARCH="armv7" ;;
         *)
-            echo -e "${RED}✗ Unsupported architecture: $arch${NC}"
+            echo -e "${RED}✗ Unsupported architecture: $ARCH${NC}"
             exit 1
             ;;
     esac
 
-    if command -v gost >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ GOST already installed${NC}"
-        return 0
-    fi
+    echo -e "${CYAN}→ Downloading GOST...${NC}"
+    cd /tmp
+    wget -q "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_${ARCH}.tar.gz" || {
+        echo -e "${RED}✗ Failed to download GOST${NC}"
+        exit 1
+    }
 
-    (
-        set +e
-        cd /tmp 2>&1 | tee -a /tmp/xtron-install.log
-        wget -q "https://github.com/go-gost/gost/releases/download/v${gost_version}/gost_${gost_version}_linux_${arch}.tar.gz" 2>&1 | tee -a /tmp/xtron-install.log
-        tar -xzf "gost_${gost_version}_linux_${arch}.tar.gz" 2>&1 | tee -a /tmp/xtron-install.log
-        mv gost /usr/local/bin/ 2>&1 | tee -a /tmp/xtron-install.log
-        chmod +x /usr/local/bin/gost 2>&1 | tee -a /tmp/xtron-install.log
-        rm -f "gost_${gost_version}_linux_${arch}.tar.gz" README.md 2>&1 | tee -a /tmp/xtron-install.log
-        exit 0
-    ) &
+    echo -e "${CYAN}→ Extracting GOST...${NC}"
+    tar -xzf "gost_${GOST_VERSION}_linux_${ARCH}.tar.gz"
+    mv gost /usr/local/bin/
+    chmod +x /usr/local/bin/gost
+    rm -f "gost_${GOST_VERSION}_linux_${ARCH}.tar.gz" README.md
 
-    spin $! "Installing GOST"
-}
+    echo -e "${GREEN}✓ GOST installed${NC}\n"
+fi
 
 # Install socat
-install_socat() {
-    echo -e "\n${YELLOW}Installing socat 1.8.x...${NC}\n"
-
-    if command -v socat >/dev/null 2>&1; then
-        local socat_ver=$(socat -V 2>&1 | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
-        if [[ ${socat_ver%%.*} -ge 1 ]] && [[ ${socat_ver#*.} -ge 8 ]]; then
-            echo -e "${GREEN}✓ socat 1.8+ already installed (v${socat_ver})${NC}"
-            return 0
-        fi
-    fi
-
+echo -e "${YELLOW}Installing socat...${NC}"
+if command -v socat >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ socat already installed${NC}\n"
+else
     case $OS in
         ubuntu|debian)
-            (
-                set +e
-                apt-get install -y -qq socat 2>&1 | tee -a /tmp/xtron-install.log
-                exit 0
-            ) &
-            spin $! "Installing socat"
+            apt-get install -y -qq socat || true
             ;;
         centos|rhel|fedora)
-            (
-                set +e
-                dnf install -y -q socat 2>&1 | tee -a /tmp/xtron-install.log
-                exit 0
-            ) &
-            spin $! "Installing socat"
+            dnf install -y -q socat || true
             ;;
     esac
-}
+    echo -e "${GREEN}✓ socat installed${NC}\n"
+fi
 
-# Create directory structure
-create_directories() {
-    echo -e "\n${YELLOW}Creating directory structure...${NC}\n"
+# Create directories
+echo -e "${YELLOW}Creating directory structure...${NC}"
+mkdir -p "$CONFIG_DIR"/{kharej,iran,templates}
+mkdir -p "$LIB_DIR"
+mkdir -p "$LOG_DIR"
+chmod 755 "$CONFIG_DIR" "$LIB_DIR"
+chmod 750 "$LOG_DIR"
+echo -e "${GREEN}✓ Directories created${NC}\n"
 
-    (
-        set +e
-        mkdir -p "$CONFIG_DIR"/{kharej,iran,templates} 2>&1 | tee -a /tmp/xtron-install.log
-        mkdir -p "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
-        mkdir -p "$LOG_DIR" 2>&1 | tee -a /tmp/xtron-install.log
-        chmod 755 "$CONFIG_DIR" "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
-        chmod 750 "$LOG_DIR" 2>&1 | tee -a /tmp/xtron-install.log
-        exit 0
-    ) &
+# Copy main script
+echo -e "${YELLOW}Installing xtron-tun script...${NC}"
+if [[ -f "./xtron-tun" ]]; then
+    cp ./xtron-tun "$INSTALL_DIR/xtron-tun"
+    chmod +x "$INSTALL_DIR/xtron-tun"
+    echo -e "${GREEN}✓ xtron-tun installed to $INSTALL_DIR${NC}\n"
+else
+    echo -e "${YELLOW}⚠ xtron-tun script not found in current directory${NC}"
+    echo -e "${YELLOW}  You can copy it manually later to $INSTALL_DIR/xtron-tun${NC}\n"
+fi
 
-    spin $! "Creating directories"
-}
+# Copy lib files if they exist
+if [[ -d "./lib" ]]; then
+    echo -e "${YELLOW}Installing library files...${NC}"
+    cp -r ./lib/* "$LIB_DIR/" 2>/dev/null || true
+    chmod +x "$LIB_DIR"/*.sh 2>/dev/null || true
+    echo -e "${GREEN}✓ Library files installed${NC}\n"
+fi
 
-# Download main scripts
-download_scripts() {
-    echo -e "\n${YELLOW}Downloading XTRON-TUN scripts...${NC}\n"
+# Set ownership
+chown -R root:root "$CONFIG_DIR" "$LIB_DIR" 2>/dev/null || true
 
-    # For now, we'll create them locally since GitHub repo doesn't exist yet
-    # Later, uncomment these lines:
-    # curl -fsSL "${GITHUB_REPO}/xtron-tun" -o "${INSTALL_DIR}/xtron-tun"
-    # curl -fsSL "${GITHUB_REPO}/lib/utils.sh" -o "${LIB_DIR}/utils.sh"
-    # curl -fsSL "${GITHUB_REPO}/lib/kharej.sh" -o "${LIB_DIR}/kharej.sh"
-    # curl -fsSL "${GITHUB_REPO}/lib/iran.sh" -o "${LIB_DIR}/iran.sh"
-
-    echo -e "${GREEN}✓ Scripts will be created locally${NC}"
-}
-
-# Set permissions
-set_permissions() {
-    echo -e "\n${YELLOW}Setting permissions...${NC}\n"
-
-    (
-        set +e
-        chmod +x "${INSTALL_DIR}/xtron-tun" 2>&1 | tee -a /tmp/xtron-install.log
-        chmod +x "${LIB_DIR}"/*.sh 2>&1 | tee -a /tmp/xtron-install.log
-        chown -R root:root "$CONFIG_DIR" "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
-        exit 0
-    ) &
-
-    spin $! "Setting permissions"
-}
-
-# Show completion message
-show_completion() {
-    echo -e "\n${GREEN}"
-    cat << "EOF"
+# Success
+echo -e "\n${GREEN}"
+cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║              ✓ Installation Completed!                   ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
-    echo -e "${NC}"
+echo -e "${NC}"
 
-    echo -e "${WHITE}XTRON-TUN has been successfully installed!${NC}\n"
-    echo -e "${CYAN}Usage:${NC}"
-    echo -e "  ${WHITE}xtron-tun${NC}          - Start the tunnel manager"
-    echo -e "  ${WHITE}xtron-tun --help${NC}   - Show help menu\n"
+echo -e "${WHITE}XTRON-TUN has been successfully installed!${NC}\n"
+echo -e "${CYAN}Usage:${NC}"
+echo -e "  ${WHITE}sudo xtron-tun${NC}          - Start the tunnel manager\n"
 
-    echo -e "${CYAN}Configuration:${NC}"
-    echo -e "  Config:  ${WHITE}${CONFIG_DIR}${NC}"
-    echo -e "  Logs:    ${WHITE}${LOG_DIR}${NC}\n"
+echo -e "${CYAN}Configuration:${NC}"
+echo -e "  Config:  ${WHITE}${CONFIG_DIR}${NC}"
+echo -e "  Logs:    ${WHITE}${LOG_DIR}${NC}\n"
 
-    echo -e "${CYAN}Next steps:${NC}"
-    echo -e "  1. Run ${WHITE}xtron-tun${NC} to start the tunnel manager"
-    echo -e "  2. Choose your server type (Iran or Kharej)"
-    echo -e "  3. Follow the setup wizard\n"
+echo -e "${CYAN}Next steps:${NC}"
+echo -e "  1. Run ${WHITE}sudo xtron-tun${NC} to start"
+echo -e "  2. Choose your server type (Iran or Kharej)"
+echo -e "  3. Follow the setup wizard\n"
 
-    echo -e "${YELLOW}For support and documentation:${NC}"
-    echo -e "  ${CYAN}https://github.com/alixtron0/xtron-tun${NC}\n"
-}
-
-# Main installation function
-main() {
-    show_banner
-
-    echo -e "${YELLOW}Starting installation...${NC}\n"
-
-    check_root
-    detect_os
-    install_dependencies
-    install_gost
-    install_socat
-    create_directories
-    download_scripts
-    set_permissions
-
-    show_completion
-
-    echo -e "${GREEN}✓ Installation completed successfully!${NC}\n"
-}
-
-# Run main function
-main "$@"
+echo -e "${GREEN}✓ Installation completed successfully!${NC}\n"
