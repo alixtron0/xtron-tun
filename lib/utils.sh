@@ -5,33 +5,37 @@
 # GitHub: alixtron0/xtron-tun
 #############################################
 
-# Colors
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly MAGENTA='\033[0;35m'
-readonly CYAN='\033[0;36m'
-readonly WHITE='\033[1;37m'
-readonly NC='\033[0m' # No Color
-readonly BOLD='\033[1m'
-readonly DIM='\033[2m'
-readonly UNDERLINE='\033[4m'
+# Source guard - prevent multiple sourcing
+[[ -n "${_XTRON_UTILS_LOADED:-}" ]] && return 0
+readonly _XTRON_UTILS_LOADED=1
 
-# Emoji / Unicode symbols
-readonly CHECK_MARK="✓"
-readonly CROSS_MARK="✗"
-readonly ARROW="→"
-readonly BULLET="•"
-readonly WARNING="⚠️"
-readonly INFO="ℹ️"
-readonly SUCCESS="🎉"
-readonly ROCKET="🚀"
+# Colors - use conditional assignment to avoid readonly conflicts
+[[ -z "${RED:-}" ]] && readonly RED='\033[0;31m'
+[[ -z "${GREEN:-}" ]] && readonly GREEN='\033[0;32m'
+[[ -z "${YELLOW:-}" ]] && readonly YELLOW='\033[1;33m'
+[[ -z "${BLUE:-}" ]] && readonly BLUE='\033[0;34m'
+[[ -z "${MAGENTA:-}" ]] && readonly MAGENTA='\033[0;35m'
+[[ -z "${CYAN:-}" ]] && readonly CYAN='\033[0;36m'
+[[ -z "${WHITE:-}" ]] && readonly WHITE='\033[1;37m'
+[[ -z "${NC:-}" ]] && readonly NC='\033[0m' # No Color
+[[ -z "${BOLD:-}" ]] && readonly BOLD='\033[1m'
+[[ -z "${DIM:-}" ]] && readonly DIM='\033[2m'
+[[ -z "${UNDERLINE:-}" ]] && readonly UNDERLINE='\033[4m'
 
-# Configuration paths
-readonly CONFIG_DIR="${CONFIG_DIR:-/etc/xtron-tun}"
-readonly LOG_DIR="${LOG_DIR:-/var/log/xtron-tun}"
-readonly LIB_DIR="${LIB_DIR:-/usr/local/lib/xtron-tun}"
+# Emoji / Unicode symbols - use conditional assignment
+[[ -z "${CHECK_MARK:-}" ]] && readonly CHECK_MARK="✓"
+[[ -z "${CROSS_MARK:-}" ]] && readonly CROSS_MARK="✗"
+[[ -z "${ARROW:-}" ]] && readonly ARROW="→"
+[[ -z "${BULLET:-}" ]] && readonly BULLET="•"
+[[ -z "${WARNING:-}" ]] && readonly WARNING="⚠️"
+[[ -z "${INFO:-}" ]] && readonly INFO="ℹ️"
+[[ -z "${SUCCESS:-}" ]] && readonly SUCCESS="🎉"
+[[ -z "${ROCKET:-}" ]] && readonly ROCKET="🚀"
+
+# Configuration paths - use conditional assignment
+[[ -z "${CONFIG_DIR:-}" ]] && readonly CONFIG_DIR="${CONFIG_DIR:-/etc/xtron-tun}"
+[[ -z "${LOG_DIR:-}" ]] && readonly LOG_DIR="${LOG_DIR:-/var/log/xtron-tun}"
+[[ -z "${LIB_DIR:-}" ]] && readonly LIB_DIR="${LIB_DIR:-/usr/local/lib/xtron-tun}"
 
 # Show banner
 show_banner() {
