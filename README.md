@@ -109,16 +109,20 @@
 
 ## 🚀 نصب
 
+### ⚠️ نکته مهم: دسترسی Root الزامی است
+
+**XTRON-TUN حتماً باید با دسترسی root اجرا شود.**
+
 ### نصب سریع (یک خطی)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/alixtron0/xtron-tun/main/install.sh)
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/alixtron0/xtron-tun/main/install.sh)
 ```
 
 یا با `wget`:
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/alixtron0/xtron-tun/main/install.sh)
+sudo bash <(wget -qO- https://raw.githubusercontent.com/alixtron0/xtron-tun/main/install.sh)
 ```
 
 ### نصب دستی
@@ -127,7 +131,7 @@ bash <(wget -qO- https://raw.githubusercontent.com/alixtron0/xtron-tun/main/inst
 # 1. دانلود اسکریپت نصب
 curl -fsSL https://raw.githubusercontent.com/alixtron0/xtron-tun/main/install.sh -o install.sh
 
-# 2. اجرای اسکریپت
+# 2. اجرای اسکریپت با sudo
 sudo bash install.sh
 
 # 3. پاک کردن فایل نصب
@@ -139,7 +143,7 @@ rm install.sh
 ```bash
 git clone https://github.com/alixtron0/xtron-tun.git
 cd xtron-tun
-sudo ./install.sh
+sudo bash install.sh
 ```
 
 ---
@@ -148,17 +152,13 @@ sudo ./install.sh
 
 ### راه‌اندازی اولیه
 
-بعد از نصب، کافیست دستور زیر را اجرا کنید:
-
-```bash
-xtron-tun
-```
-
-یا با `sudo`:
+بعد از نصب، **حتماً با دسترسی root** دستور زیر را اجرا کنید:
 
 ```bash
 sudo xtron-tun
 ```
+
+**نکته:** اگر بدون `sudo` اجرا کنید، خطای دسترسی دریافت خواهید کرد.
 
 ---
 
@@ -275,18 +275,20 @@ scp /tmp/xtron-smtp-tunnel-1-config.zip user@iran-server:/tmp/
 
 ### مدیریت سرویس‌ها
 
+**همه دستورات systemd نیاز به دسترسی root دارند:**
+
 ```bash
 # نمایش وضعیت تونل (Kharej)
-systemctl status xtron-tunnel-name.service
+sudo systemctl status xtron-tunnel-name.service
 
 # نمایش وضعیت Port Forward (Iran)
-systemctl status xtron-pf-pf-name.service
+sudo systemctl status xtron-pf-pf-name.service
 
 # لاگ‌های زنده
-journalctl -u xtron-tunnel-name.service -f
+sudo journalctl -u xtron-tunnel-name.service -f
 
 # ریستارت سرویس
-systemctl restart xtron-tunnel-name.service
+sudo systemctl restart xtron-tunnel-name.service
 ```
 
 ---
@@ -299,21 +301,21 @@ systemctl restart xtron-tunnel-name.service
 
 1. بررسی کنید سرویس در حال اجرا باشد:
    ```bash
-   systemctl status xtron-tunnel-name.service
+   sudo systemctl status xtron-tunnel-name.service
    ```
 
 2. بررسی لاگ‌ها:
    ```bash
-   tail -f /var/log/xtron-tun/tunnel-name.log
+   sudo tail -f /var/log/xtron-tun/tunnel-name.log
    ```
 
 3. بررسی فایروال:
    ```bash
    # Ubuntu/Debian
-   ufw status
+   sudo ufw status
 
    # CentOS/RHEL
-   firewall-cmd --list-all
+   sudo firewall-cmd --list-all
    ```
 
 ### مشکل: Port Forward کار نمی‌کند

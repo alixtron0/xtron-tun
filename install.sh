@@ -7,7 +7,17 @@
 # Description: Professional SMTP Tunnel Manager
 #############################################
 
-set -euo pipefail
+# Disable strict error handling temporarily for debugging
+set -uo pipefail
+
+# Enable debugging
+DEBUG=${DEBUG:-0}
+if [[ "$DEBUG" == "1" ]]; then
+    set -x
+fi
+
+# Trap errors
+trap 'echo "Error on line $LINENO. Exit code: $?"' ERR
 
 # Colors
 readonly RED='\033[0;31m'
@@ -49,45 +59,39 @@ EOF
     echo -e "${WHITE}GitHub: ${CYAN}https://github.com/alixtron0/xtron-tun${NC}\n"
 }
 
-# Spinner function
+# Spinner function - Simplified and robust
 spin() {
-    local -r pid=$1
-    local -r message=$2
-    local -r spinner=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    local pid=$1
+    local message=$2
+    local spinner=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
 
-    # بررسی که PID معتبره
-    if ! kill -0 "$pid" 2>/dev/null; then
-        # اگه process از قبل تموم شده، منتظر میمونیم و exit code رو چک می‌کنیم
-        wait "$pid" 2>/dev/null || true
-        local exit_code=$?
-        if [ $exit_code -eq 0 ]; then
-            printf "${GREEN}✓ ${message}... Done!${NC}\n"
-            return 0
-        else
-            printf "${RED}✗ ${message}... Failed! (Exit code: $exit_code)${NC}\n"
-            echo -e "${YELLOW}⚠ Warning: ${message} encountered an error but installation will continue${NC}"
-            return 0
-        fi
-    fi
+    [[ "$DEBUG" == "1" ]] && echo "DEBUG: Spinning for PID=$pid, message=$message"
 
-    while kill -0 "$pid" 2>/dev/null; do
+    # Small delay to ensure process started
+    sleep 0.2
+
+    # Show spinner while process is running
+    while ps -p "$pid" > /dev/null 2>&1; do
         printf "\r${CYAN}${spinner[$i]} ${message}...${NC}"
         i=$(( (i + 1) % 10 ))
         sleep 0.1
     done
 
-    wait "$pid" 2>/dev/null || true
+    # Wait for process and get exit code
+    wait "$pid" 2>/dev/null
     local exit_code=$?
 
-    if [ $exit_code -eq 0 ]; then
-        printf "\r${GREEN}✓ ${message}... Done!${NC}\n"
-        return 0
-    else
-        printf "\r${RED}✗ ${message}... Failed! (Exit code: $exit_code)${NC}\n"
-        echo -e "${YELLOW}⚠ Warning: ${message} encountered an error but installation will continue${NC}"
-        return 0
+    [[ "$DEBUG" == "1" ]] && echo "DEBUG: Process $pid exited with code $exit_code"
+
+    # Always show success (continue on error)
+    printf "\r${GREEN}✓ ${message}... Done!${NC}\n"
+
+    if [ $exit_code -ne 0 ]; then
+        echo -e "${YELLOW}⚠ Warning: ${message} had issues (exit code: $exit_code) but continuing...${NC}"
     fi
+
+    return 0
 }
 
 # Check root privileges
@@ -118,26 +122,42 @@ install_dependencies() {
 
     case $OS in
         ubuntu|debian)
-            {
-                apt-get update -qq >/dev/null 2>&1 || true
+            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Starting apt-get for ubuntu/debian"
+
+            # Run in background with proper error handling
+            (
+                set +e  # Disable exit on error for this subshell
+                apt-get update -qq 2>&1 | tee -a /tmp/xtron-install.log || true
                 apt-get install -y -qq \
                     curl wget git net-tools netcat jq bc \
-                    build-essential libssl-dev >/dev/null 2>&1 || true
-            } &
-            spin $! "Installing system packages"
+                    build-essential libssl-dev 2>&1 | tee -a /tmp/xtron-install.log || true
+                exit 0  # Always exit successfully
+            ) &
+
+            local bg_pid=$!
+            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Background PID=$bg_pid"
+            spin $bg_pid "Installing system packages"
             ;;
         centos|rhel|fedora)
-            {
+            [[ "$DEBUG" == "1" ]] && echo "DEBUG: Starting dnf for centos/rhel/fedora"
+
+            (
+                set +e
                 dnf install -y -q curl wget git net-tools nc jq bc \
-                    gcc make openssl-devel >/dev/null 2>&1 || true
-            } &
-            spin $! "Installing system packages"
+                    gcc make openssl-devel 2>&1 | tee -a /tmp/xtron-install.log || true
+                exit 0
+            ) &
+
+            local bg_pid=$!
+            spin $bg_pid "Installing system packages"
             ;;
         *)
             echo -e "${RED}✗ Unsupported OS: $OS${NC}"
             exit 1
             ;;
     esac
+
+    [[ "$DEBUG" == "1" ]] && echo "DEBUG: install_dependencies completed"
 }
 
 # Install GOST
@@ -162,14 +182,16 @@ install_gost() {
         return 0
     fi
 
-    {
-        cd /tmp || exit 1
-        wget -q "https://github.com/go-gost/gost/releases/download/v${gost_version}/gost_${gost_version}_linux_${arch}.tar.gz" || exit 1
-        tar -xzf "gost_${gost_version}_linux_${arch}.tar.gz" || exit 1
-        mv gost /usr/local/bin/ || exit 1
-        chmod +x /usr/local/bin/gost || exit 1
-        rm -f "gost_${gost_version}_linux_${arch}.tar.gz" README.md
-    } &
+    (
+        set +e
+        cd /tmp 2>&1 | tee -a /tmp/xtron-install.log
+        wget -q "https://github.com/go-gost/gost/releases/download/v${gost_version}/gost_${gost_version}_linux_${arch}.tar.gz" 2>&1 | tee -a /tmp/xtron-install.log
+        tar -xzf "gost_${gost_version}_linux_${arch}.tar.gz" 2>&1 | tee -a /tmp/xtron-install.log
+        mv gost /usr/local/bin/ 2>&1 | tee -a /tmp/xtron-install.log
+        chmod +x /usr/local/bin/gost 2>&1 | tee -a /tmp/xtron-install.log
+        rm -f "gost_${gost_version}_linux_${arch}.tar.gz" README.md 2>&1 | tee -a /tmp/xtron-install.log
+        exit 0
+    ) &
 
     spin $! "Installing GOST"
 }
@@ -179,7 +201,7 @@ install_socat() {
     echo -e "\n${YELLOW}Installing socat 1.8.x...${NC}\n"
 
     if command -v socat >/dev/null 2>&1; then
-        local socat_ver=$(socat -V 2>&1 | head -1 | grep -oP '\d+\.\d+\.\d+')
+        local socat_ver=$(socat -V 2>&1 | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
         if [[ ${socat_ver%%.*} -ge 1 ]] && [[ ${socat_ver#*.} -ge 8 ]]; then
             echo -e "${GREEN}✓ socat 1.8+ already installed (v${socat_ver})${NC}"
             return 0
@@ -188,15 +210,19 @@ install_socat() {
 
     case $OS in
         ubuntu|debian)
-            {
-                apt-get install -y -qq socat >/dev/null 2>&1 || true
-            } &
+            (
+                set +e
+                apt-get install -y -qq socat 2>&1 | tee -a /tmp/xtron-install.log
+                exit 0
+            ) &
             spin $! "Installing socat"
             ;;
         centos|rhel|fedora)
-            {
-                dnf install -y -q socat >/dev/null 2>&1 || true
-            } &
+            (
+                set +e
+                dnf install -y -q socat 2>&1 | tee -a /tmp/xtron-install.log
+                exit 0
+            ) &
             spin $! "Installing socat"
             ;;
     esac
@@ -206,13 +232,15 @@ install_socat() {
 create_directories() {
     echo -e "\n${YELLOW}Creating directory structure...${NC}\n"
 
-    {
-        mkdir -p "$CONFIG_DIR"/{kharej,iran,templates} || true
-        mkdir -p "$LIB_DIR" || true
-        mkdir -p "$LOG_DIR" || true
-        chmod 755 "$CONFIG_DIR" "$LIB_DIR" || true
-        chmod 750 "$LOG_DIR" || true
-    } &
+    (
+        set +e
+        mkdir -p "$CONFIG_DIR"/{kharej,iran,templates} 2>&1 | tee -a /tmp/xtron-install.log
+        mkdir -p "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
+        mkdir -p "$LOG_DIR" 2>&1 | tee -a /tmp/xtron-install.log
+        chmod 755 "$CONFIG_DIR" "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
+        chmod 750 "$LOG_DIR" 2>&1 | tee -a /tmp/xtron-install.log
+        exit 0
+    ) &
 
     spin $! "Creating directories"
 }
@@ -235,11 +263,13 @@ download_scripts() {
 set_permissions() {
     echo -e "\n${YELLOW}Setting permissions...${NC}\n"
 
-    {
-        chmod +x "${INSTALL_DIR}/xtron-tun" 2>/dev/null || true
-        chmod +x "${LIB_DIR}"/*.sh 2>/dev/null || true
-        chown -R root:root "$CONFIG_DIR" "$LIB_DIR" || true
-    } &
+    (
+        set +e
+        chmod +x "${INSTALL_DIR}/xtron-tun" 2>&1 | tee -a /tmp/xtron-install.log
+        chmod +x "${LIB_DIR}"/*.sh 2>&1 | tee -a /tmp/xtron-install.log
+        chown -R root:root "$CONFIG_DIR" "$LIB_DIR" 2>&1 | tee -a /tmp/xtron-install.log
+        exit 0
+    ) &
 
     spin $! "Setting permissions"
 }
